@@ -72,15 +72,23 @@ app.post('/api/convert-erd-image', upload.single('diagram'), async (req, res) =>
 });
 
 // Endpoint to accept SQL schema and return synthetic data
-app.post('/api/generate-mock-data', express.text({ type: '*/*' }), (req, res) => {
-    const schema = req.body;
-    console.log('Received schema for mock data generation:\n', schema);
-    if (!schema || !schema.toLowerCase().includes('create table')) {
+app.use(express.json({ limit: '2mb' })); // Add JSON parser globally
+
+app.post('/api/generate-mock-data', (req, res) => {
+    let schema, rows;
+    if (typeof req.body === 'object' && req.body.schema) {
+        schema = req.body.schema;
+        rows = parseInt(req.body.rows) || 10;
+    } else if (typeof req.body === 'string') {
+        schema = req.body;
+        rows = 10;
+    }
+    if (typeof schema !== 'string' || !schema.toLowerCase().includes('create table')) {
         console.log('Error: Invalid or missing SQL schema.');
         return res.status(400).json({ error: 'Invalid or missing SQL schema.' });
     }
     try {
-        const mockData = generateMockData(schema, 10);
+        const mockData = generateMockData(schema, rows);
         console.log('Mock data generated successfully.');
         res.json({ mockData });
     } catch (err) {

@@ -11,6 +11,8 @@ function parseSchema(schema) {
         const tableName = match[1];
         const columnsDef = match[2];
         const columns = [];
+        let foreignKeys = [];
+        let primaryKeys = [];
         // Split columns on commas not inside parentheses
         const colLines = [];
         let buffer = '';
@@ -28,19 +30,31 @@ function parseSchema(schema) {
         if (buffer.trim()) colLines.push(buffer);
         colLines.forEach(line => {
             line = line.trim();
-            // Skip empty lines and foreign key lines
-            if (!line || line.toUpperCase().startsWith('FOREIGN KEY')) return;
-            // Extract column name and type (handles types like DECIMAL(12,2), ENUM(...), CHAR(3), etc.) and rest (for AUTO_INCREMENT)
+            // FOREIGN KEY
+            const fkMatch = line.match(/^FOREIGN KEY \(([^)]+)\) REFERENCES (\w+)\(([^)]+)\)/i);
+            if (fkMatch) {
+                foreignKeys.push({
+                    column: fkMatch[1].trim(),
+                    refTable: fkMatch[2].trim(),
+                    refColumn: fkMatch[3].trim()
+                });
+                return;
+            }
+            // PRIMARY KEY inline
+            const pkInline = /PRIMARY KEY/i.test(line);
+            // Extract column name, type, and rest
             const colMatch = line.match(/^(\w+)\s+([A-Z]+(?:\([^)]*\))?)(.*)$/i);
             if (colMatch) {
                 columns.push({
                     name: colMatch[1],
                     type: colMatch[2].toUpperCase(),
-                    autoIncrement: /AUTO_INCREMENT/i.test(colMatch[3])
+                    autoIncrement: /AUTO_INCREMENT/i.test(colMatch[3]),
+                    isPrimary: pkInline
                 });
+                if (pkInline) primaryKeys.push(colMatch[1]);
             }
         });
-        tables.push({ name: tableName, columns });
+        tables.push({ name: tableName, columns, foreignKeys, primaryKeys });
     }
     return tables;
 }
@@ -78,17 +92,49 @@ function generateValue(type, name, opts = {}) {
 
 function generateMockData(schema, rowsPerTable = 10) {
     const tables = parseSchema(schema);
+    // Build dependency graph and sort tables
+    const tableMap = Object.fromEntries(tables.map(t => [t.name, t]));
+    const visited = new Set();
+    const sorted = [];
+    function visit(table) {
+        if (visited.has(table.name)) return;
+        for (const fk of table.foreignKeys) {
+            if (tableMap[fk.refTable]) visit(tableMap[fk.refTable]);
+        }
+        visited.add(table.name);
+        sorted.push(table);
+    }
+    tables.forEach(visit);
+    // Generate data
     const result = {};
-    tables.forEach(table => {
+    const pkCache = {}; // table -> array of pk values
+    for (const table of sorted) {
         result[table.name] = [];
+        const parentKeys = {};
+        // Prepare parent PKs for all FKs in this table
+        for (const fk of table.foreignKeys) {
+            parentKeys[fk.column] = pkCache[fk.refTable] || [];
+        }
         for (let i = 0; i < rowsPerTable; i++) {
             const row = {};
+            // For each column, if FK, pick from parent
             table.columns.forEach(col => {
-                row[col.name] = generateValue(col.type, col.name, { autoIncrement: col.autoIncrement, rowIndex: i });
+                // Is this column a FK?
+                const fk = table.foreignKeys.find(fk => fk.column === col.name);
+                if (fk && parentKeys[fk.column].length > 0) {
+                    // Pick a random PK from parent table
+                    row[col.name] = parentKeys[fk.column][faker.number.int({ min: 0, max: parentKeys[fk.column].length - 1 })];
+                } else {
+                    row[col.name] = generateValue(col.type, col.name, { autoIncrement: col.autoIncrement, rowIndex: i });
+                }
             });
             result[table.name].push(row);
         }
-    });
+        // Cache PK values for this table for use by children
+        if (table.primaryKeys.length === 1) {
+            pkCache[table.name] = result[table.name].map(row => row[table.primaryKeys[0]]);
+        }
+    }
     return result;
 }
 

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import styles from './ERDEditor.module.css';
 import drawerStyles from './Drawer.module.css';
 
-
 //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
 const ERDEditor = () => {
+  // Pagination state per table
+  const [tablePage, setTablePage] = useState({});
   // Dropdown state for selected table
   const [selectedTable, setSelectedTable] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -19,15 +20,64 @@ const ERDEditor = () => {
   const [mockData, setMockData] = useState(null);
   const [mockLoading, setMockLoading] = useState(false);
   const [mockError, setMockError] = useState('');
+  // Number of records (default 10)
+  const [numRecords, setNumRecords] = useState(10);
 
   // Schema file upload
   const [schemaFile, setSchemaFile] = useState(null);
+
+  // Download current table as JSON
+  const handleDownloadJson = () => {
+    if (!table || !rows.length) return;
+    const dataStr = JSON.stringify(rows, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${table}_mock_data.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Download current table as SQL insert statements
+  const handleDownloadSql = () => {
+    if (!table || !rows.length) return;
+    const columns = Object.keys(rows[0]);
+    const insertStatements = rows.map(row => {
+      const values = columns.map(col => {
+        const val = row[col];
+        if (typeof val === 'string') return `"${val.replace(/"/g, '""')}`;
+        if (val === null || val === undefined) return 'NULL';
+        return val;
+      });
+      return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')});`;
+    });
+    const blob = new Blob([insertStatements.join('\n')], { type: 'text/sql' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${table}_mock_data.sql`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Handle schema file upload
   const handleSchemaFileUpload = async (file) => {
     const text = await file.text();
     setSchemaInput(text);
   };
+
+  // Table and pagination logic
+  const table = selectedTable || (mockData && Object.keys(mockData)[0]);
+  const rows = table && mockData ? mockData[table] : [];
+  const rowsPerPage = 20;
+  const currentPage = table && tablePage[table] ? tablePage[table] : 1;
+  const totalPages = rows.length > 0 ? Math.ceil(rows.length / rowsPerPage) : 1;
+  const pagedRows = rows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
   return (
     <>
@@ -119,9 +169,9 @@ const ERDEditor = () => {
                     const text = await schemaFile.text();
                     setSchemaInput(text); // keep textarea in sync
                     const res = await fetch('http://localhost:3001/api/generate-mock-data', {
+                      headers: { 'Content-Type': 'application/json' },
                       method: 'POST',
-                      headers: { 'Content-Type': 'text/plain' },
-                      body: text,
+                      body: JSON.stringify({ schema: text, rows: numRecords })
                     });
                     const data = await res.json();
                     if (data.mockData) setMockData(data.mockData);
@@ -145,6 +195,44 @@ const ERDEditor = () => {
         {/* Main Content */}
         <main className={styles.mainContentWithNav} style={{marginLeft: 290, flex: 1, padding: '36px 5vw 36px 5vw', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start'}}>
           <div style={{width: '100%', marginTop: 30}}>
+            {/* Number of records input (only for schema mode) */}
+            {mode === 'schema' && (
+              <div style={{display:'flex', alignItems:'center', marginBottom:18, justifyContent:'flex-end'}}>
+                <label style={{fontWeight:500, marginRight:8}}>Number of records:</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={numRecords}
+                  onChange={e => setNumRecords(Math.max(1, Math.min(1000, Number(e.target.value) || 1)))}
+                  style={{width:70, padding:'6px 10px', border:'1px solid #b7e4c7', borderRadius:4, fontWeight:500, marginRight:10}}
+                />
+                <button
+                  style={{padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor:'pointer'}}
+                  disabled={mockLoading || !schemaInput}
+                  onClick={async () => {
+                    if (!schemaInput) return;
+                    setMockError('');
+                    setMockData(null);
+                    setMockLoading(true);
+                    try {
+                      const res = await fetch('http://localhost:3001/api/generate-mock-data', {
+                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST',
+                        body: JSON.stringify({ schema: schemaInput, rows: numRecords })
+                      });
+                      const data = await res.json();
+                      if (data.mockData) setMockData(data.mockData);
+                      else setMockError(data.error || 'Unknown error.');
+                    } catch (e) {
+                      setMockError('Failed to generate mock data.');
+                    } finally {
+                      setMockLoading(false);
+                    }
+                  }}
+                >Regenerate</button>
+              </div>
+            )}
             {/* Loader: Show while uploading or processing */}
             {(uploading || mockLoading) && (
               <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'60vh',width:'100%'}}>
@@ -166,13 +254,16 @@ const ERDEditor = () => {
             )}
             {!uploading && !mockLoading && mockData && (
   <div className={styles.resultBox} style={{background: '#fff', border: '1.5px solid #6ee7b7', boxShadow: '0 2px 16px #e2f7e6', borderRadius: 10}}>
-    <h3 style={{marginTop:0, color:'#227a5e', fontWeight:700}}>Synthetic Mock Data</h3>
+    {/* Table selection if multiple tables */}
     {Object.keys(mockData).length > 1 && (
       <div style={{marginBottom: 18}}>
         <label style={{fontWeight: 500, marginRight: 10}}>Select Table:</label>
         <select
           value={selectedTable || Object.keys(mockData)[0]}
-          onChange={e => setSelectedTable(e.target.value)}
+          onChange={e => {
+            setSelectedTable(e.target.value);
+            setTablePage(p => ({ ...p, [e.target.value]: 1 }));
+          }}
           style={{padding: '6px 12px', borderRadius: 4, border: '1px solid #b7e4c7', fontWeight: 500}}
         >
           {Object.keys(mockData).map(table => (
@@ -182,87 +273,50 @@ const ERDEditor = () => {
       </div>
     )}
     {/* Show table for selectedTable, or only table if one */}
-    {(() => {
-      const table = selectedTable || Object.keys(mockData)[0];
-      if (!mockData[table]) return null;
-      // Download handlers
-      const handleDownloadJson = () => {
-        const blob = new Blob([
-          JSON.stringify(mockData[table], null, 2)
-        ], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${table}_mock_data.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      };
-      const handleDownloadSql = () => {
-        if (!mockData[table] || !mockData[table].length) return;
-        const cols = Object.keys(mockData[table][0]);
-        const values = mockData[table].map(row =>
-          '(' + cols.map(col => {
-            const val = row[col];
-            if (val === null || val === undefined) return 'NULL';
-            if (typeof val === 'number') return val;
-            // Escape single quotes in strings
-            return `'${String(val).replace(/'/g, "''")}'`;
-          }).join(', ') + ')'
-        );
-        const sql = `INSERT INTO ${table} (${cols.join(', ')}) VALUES\n${values.join(',\n')};`;
-        const blob = new Blob([sql], { type: 'text/sql' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${table}_mock_data.sql`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      };
-      return (
-        <div style={{marginBottom:32}}>
-          <div style={{display:'flex', alignItems:'center', marginBottom:10}}>
-            <div style={{fontWeight:600, fontSize:18, color:'#227a5e', marginRight:16}}>{table}</div>
-            <button onClick={handleDownloadJson} style={{marginRight:8, padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download JSON</button>
-            <button onClick={handleDownloadSql} style={{padding:'6px 14px', border:'none', background:'#bbf7d0', color:'#166534', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download SQL</button>
-          </div>
-          <div className={styles.tableScrollContainer}>
-            <table style={{borderCollapse:'collapse', width:'100%', minWidth:'900px', background:'#f7fafc', fontSize:15}}>
-              <thead>
-                <tr>
-                  {Object.keys(mockData[table][0] || {}).map(col => (
-                    <th key={col} style={{border:'1px solid #b7e4c7', background:'#d1fae5', padding:'6px 12px', fontWeight:600}}>{col}</th>
+    {table && rows.length > 0 && (
+      <div style={{marginBottom:32}}>
+        <div style={{display:'flex', alignItems:'center', marginBottom:10}}>
+          <div style={{fontWeight:600, fontSize:18, color:'#227a5e', marginRight:16}}>{table}</div>
+          <button onClick={handleDownloadJson} style={{marginRight:8, padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download JSON</button>
+          <button onClick={handleDownloadSql} style={{padding:'6px 14px', border:'none', background:'#bbf7d0', color:'#166534', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download SQL</button>
+        </div>
+        <div className={styles.tableScrollContainer}>
+          <table style={{borderCollapse:'collapse', width:'100%', minWidth:'900px', background:'#f7fafc', fontSize:15}}>
+            <thead>
+              <tr>
+                {Object.keys(rows[0] || {}).map(col => (
+                  <th key={col} style={{border:'1px solid #b7e4c7', background:'#d1fae5', padding:'6px 12px', fontWeight:600}}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pagedRows.map((row, idx) => (
+                <tr key={idx}>
+                  {Object.values(row).map((val, i) => (
+                    <td key={i} style={{border:'1px solid #e2e8f0', padding:'6px 12px', color:'#374151'}}>{val}</td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {mockData[table].map((row, idx) => (
-                  <tr key={idx}>
-                    {Object.values(row).map((val, i) => (
-                      <td key={i} style={{border:'1px solid #e2e8f0', padding:'6px 12px', color:'#374151'}}>{val}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-      );
-    })()}
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div style={{display:'flex', justifyContent:'center', alignItems:'center', marginTop:18}}>
+            <button onClick={() => setTablePage(p => ({ ...p, [table]: Math.max(1, (p[table]||1)-1) }))} disabled={currentPage===1} style={{marginRight:10, padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor: currentPage===1 ? 'not-allowed' : 'pointer'}}>Prev</button>
+            <span style={{fontWeight:500, fontSize:15, margin:'0 8px'}}>Page {currentPage} of {totalPages}</span>
+            <button onClick={() => setTablePage(p => ({ ...p, [table]: Math.min(totalPages, (p[table]||1)+1) }))} disabled={currentPage===totalPages} style={{marginLeft:10, padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor: currentPage===totalPages ? 'not-allowed' : 'pointer'}}>Next</button>
+          </div>
+        )}
+      </div>
+    )}
   </div>
 )}
-            {/* If nothing to show */}
-            {!uploading && !mockLoading && !imageSchema && !mockData && !mockError && (
-              <div style={{color:'#aaa', fontSize:18, marginTop:60, textAlign:'center'}}>Output will appear here after you upload and process your ERD or schema.</div>
-            )}
-          </div>
+            </div> 
         </main>
-      </div>
-    </>
-  );
-};
+        </div> 
+        </>
+      );
+    }
 
 export default ERDEditor;
