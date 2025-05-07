@@ -5,6 +5,8 @@ import drawerStyles from './Drawer.module.css';
 
 //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
 const ERDEditor = () => {
+  // Dropdown state for selected table
+  const [selectedTable, setSelectedTable] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [imageSchema, setImageSchema] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -163,36 +165,95 @@ const ERDEditor = () => {
               </div>
             )}
             {!uploading && !mockLoading && mockData && (
-              <div className={styles.resultBox} style={{background: '#fff', border: '1.5px solid #6ee7b7', boxShadow: '0 2px 16px #e2f7e6', borderRadius: 10}}>
-                <h3 style={{marginTop:0, color:'#227a5e', fontWeight:700}}>Synthetic Mock Data</h3>
-                {/* Render as tables if possible, else fallback to JSON */}
-                {Object.keys(mockData).map(table => (
-                  <div key={table} style={{marginBottom:32}}>
-                    <div style={{fontWeight:600, fontSize:18, color:'#227a5e', marginBottom:6}}>{table}</div>
-                    <div className={styles.tableScrollContainer}>
-                      <table style={{borderCollapse:'collapse', width:'100%', minWidth:'900px', background:'#f7fafc', fontSize:15}}>
-                        <thead>
-                          <tr>
-                            {Object.keys(mockData[table][0] || {}).map(col => (
-                              <th key={col} style={{border:'1px solid #b7e4c7', background:'#d1fae5', padding:'6px 12px', fontWeight:600}}>{col}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {mockData[table].map((row, idx) => (
-                            <tr key={idx}>
-                              {Object.values(row).map((val, i) => (
-                                <td key={i} style={{border:'1px solid #e2e8f0', padding:'6px 12px', color:'#374151'}}>{val}</td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+  <div className={styles.resultBox} style={{background: '#fff', border: '1.5px solid #6ee7b7', boxShadow: '0 2px 16px #e2f7e6', borderRadius: 10}}>
+    <h3 style={{marginTop:0, color:'#227a5e', fontWeight:700}}>Synthetic Mock Data</h3>
+    {Object.keys(mockData).length > 1 && (
+      <div style={{marginBottom: 18}}>
+        <label style={{fontWeight: 500, marginRight: 10}}>Select Table:</label>
+        <select
+          value={selectedTable || Object.keys(mockData)[0]}
+          onChange={e => setSelectedTable(e.target.value)}
+          style={{padding: '6px 12px', borderRadius: 4, border: '1px solid #b7e4c7', fontWeight: 500}}
+        >
+          {Object.keys(mockData).map(table => (
+            <option key={table} value={table}>{table}</option>
+          ))}
+        </select>
+      </div>
+    )}
+    {/* Show table for selectedTable, or only table if one */}
+    {(() => {
+      const table = selectedTable || Object.keys(mockData)[0];
+      if (!mockData[table]) return null;
+      // Download handlers
+      const handleDownloadJson = () => {
+        const blob = new Blob([
+          JSON.stringify(mockData[table], null, 2)
+        ], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${table}_mock_data.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+      const handleDownloadSql = () => {
+        if (!mockData[table] || !mockData[table].length) return;
+        const cols = Object.keys(mockData[table][0]);
+        const values = mockData[table].map(row =>
+          '(' + cols.map(col => {
+            const val = row[col];
+            if (val === null || val === undefined) return 'NULL';
+            if (typeof val === 'number') return val;
+            // Escape single quotes in strings
+            return `'${String(val).replace(/'/g, "''")}'`;
+          }).join(', ') + ')'
+        );
+        const sql = `INSERT INTO ${table} (${cols.join(', ')}) VALUES\n${values.join(',\n')};`;
+        const blob = new Blob([sql], { type: 'text/sql' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${table}_mock_data.sql`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+      return (
+        <div style={{marginBottom:32}}>
+          <div style={{display:'flex', alignItems:'center', marginBottom:10}}>
+            <div style={{fontWeight:600, fontSize:18, color:'#227a5e', marginRight:16}}>{table}</div>
+            <button onClick={handleDownloadJson} style={{marginRight:8, padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download JSON</button>
+            <button onClick={handleDownloadSql} style={{padding:'6px 14px', border:'none', background:'#bbf7d0', color:'#166534', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download SQL</button>
+          </div>
+          <div className={styles.tableScrollContainer}>
+            <table style={{borderCollapse:'collapse', width:'100%', minWidth:'900px', background:'#f7fafc', fontSize:15}}>
+              <thead>
+                <tr>
+                  {Object.keys(mockData[table][0] || {}).map(col => (
+                    <th key={col} style={{border:'1px solid #b7e4c7', background:'#d1fae5', padding:'6px 12px', fontWeight:600}}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {mockData[table].map((row, idx) => (
+                  <tr key={idx}>
+                    {Object.values(row).map((val, i) => (
+                      <td key={i} style={{border:'1px solid #e2e8f0', padding:'6px 12px', color:'#374151'}}>{val}</td>
+                    ))}
+                  </tr>
                 ))}
-              </div>
-            )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    })()}
+  </div>
+)}
             {/* If nothing to show */}
             {!uploading && !mockLoading && !imageSchema && !mockData && !mockError && (
               <div style={{color:'#aaa', fontSize:18, marginTop:60, textAlign:'center'}}>Output will appear here after you upload and process your ERD or schema.</div>

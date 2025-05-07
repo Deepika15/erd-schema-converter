@@ -30,12 +30,13 @@ function parseSchema(schema) {
             line = line.trim();
             // Skip empty lines and foreign key lines
             if (!line || line.toUpperCase().startsWith('FOREIGN KEY')) return;
-            // Extract column name and type (handles types like DECIMAL(12,2), ENUM(...), CHAR(3), etc.)
-            const colMatch = line.match(/^(\w+)\s+([A-Z]+(?:\([^)]*\))?)/i);
+            // Extract column name and type (handles types like DECIMAL(12,2), ENUM(...), CHAR(3), etc.) and rest (for AUTO_INCREMENT)
+            const colMatch = line.match(/^(\w+)\s+([A-Z]+(?:\([^)]*\))?)(.*)$/i);
             if (colMatch) {
                 columns.push({
                     name: colMatch[1],
-                    type: colMatch[2].toUpperCase()
+                    type: colMatch[2].toUpperCase(),
+                    autoIncrement: /AUTO_INCREMENT/i.test(colMatch[3])
                 });
             }
         });
@@ -44,10 +45,11 @@ function parseSchema(schema) {
     return tables;
 }
 
-function generateValue(type, name) {
+function generateValue(type, name, opts = {}) {
     // Use column name for better realism
     const n = name.toLowerCase();
     const t = type.toUpperCase();
+    if (opts.autoIncrement && typeof opts.rowIndex === 'number') return opts.rowIndex + 1;
     if (n.includes('email')) return faker.internet.email();
     if (n.includes('name')) return faker.person.fullName();
     if (n.includes('account_number')) return faker.finance.accountNumber(12);
@@ -82,7 +84,7 @@ function generateMockData(schema, rowsPerTable = 10) {
         for (let i = 0; i < rowsPerTable; i++) {
             const row = {};
             table.columns.forEach(col => {
-                row[col.name] = generateValue(col.type, col.name);
+                row[col.name] = generateValue(col.type, col.name, { autoIncrement: col.autoIncrement, rowIndex: i });
             });
             result[table.name].push(row);
         }
