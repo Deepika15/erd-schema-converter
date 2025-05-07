@@ -2,7 +2,7 @@ CREATE TABLE users (
     user_id UUID PRIMARY KEY,
     full_name VARCHAR(100),
     email VARCHAR(100) UNIQUE NOT NULL,
-    phone_number VARCHAR(20),
+    phone_number INT(7),
     date_of_birth DATE,
     risk_score DECIMAL(5,2) DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

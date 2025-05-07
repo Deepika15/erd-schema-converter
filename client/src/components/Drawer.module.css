@@ -4,7 +4,7 @@
   top: 0;
   width: 290px;
   height: 100vh;
-  background: #e5e7eb; /* Bit darker gray */
+  background: #424242; /* Dark gray sidebar */
   color: #333;
   display: flex;
   flex-direction: column;

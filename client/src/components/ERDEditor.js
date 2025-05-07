@@ -82,7 +82,13 @@ const ERDEditor = () => {
   return (
     <>
       <nav className={styles.navbar}>
-        AI Synthetic Data Generator
+        <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14}}>
+          <svg height="32" width="32" viewBox="0 0 32 32" fill="#fff" style={{marginRight: 6}} xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="16" fill="#388e3c"/>
+            <text x="16" y="22" textAnchor="middle" fontSize="16" fill="#fff" fontFamily="Roboto, sans-serif">SD</text>
+          </svg>
+          <span>AI Synthetic Data Generator</span>
+        </span>
       </nav>
       <div style={{display: 'flex', minHeight: '100vh'}}>
         {/* Left Drawer */}
@@ -128,12 +134,6 @@ const ERDEditor = () => {
                   }}
                   style={{marginBottom: 10}}
                 />
-                {schemaInput && (
-                  <div style={{margin:'10px 0 0 0', width:'100%'}}>
-                    <div style={{fontWeight:500, color:'#5b5b9a', marginBottom:4, fontSize:14}}>Schema Preview:</div>
-                    <pre style={{background:'#f6f6fa', color:'#232526', fontSize:13, padding:10, borderRadius:6, maxHeight:180, overflowY:'auto', border:'1px solid #d6d6ee', whiteSpace:'pre-wrap'}}>{schemaInput}</pre>
-                  </div>
-                )}
               </>
             )}
             <button
@@ -190,13 +190,19 @@ const ERDEditor = () => {
             >
               {mode === 'erd' ? (uploading ? 'Uploading...' : 'Submit ERD Image') : (mockLoading ? 'Processing...' : 'Submit Schema File')}
             </button>
+            {mode === 'schema' && schemaInput && (
+              <div style={{margin:'10px 0 0 0', width:'100%'}}>
+                <div style={{fontWeight:500, color:'#fff', marginBottom:4, fontSize:14, fontFamily:'Roboto, sans-serif'}}>Schema Preview:</div>
+                <pre style={{background:'#f6f6fa', color:'#232526', fontSize:13, padding:10, borderRadius:6, maxHeight:450, overflowY:'auto', border:'1px solid #d6d6ee', whiteSpace:'pre-wrap'}}>{schemaInput}</pre>
+              </div>
+            )}
           </div>
         </aside>
         {/* Main Content */}
-        <main className={styles.mainContentWithNav} style={{marginLeft: 290, flex: 1, padding: '36px 5vw 36px 5vw', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start'}}>
+        <main className={styles.mainContentWithNav} style={{marginLeft: 260, flex: 1, padding: '36px 5vw 36px 5vw', background: '#f8f9fa', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start'}}>
           <div style={{width: '100%', marginTop: 30}}>
             {/* Number of records input (only for schema mode) */}
-            {mode === 'schema' && (
+            {/* {mode === 'schema' && (
               <div style={{display:'flex', alignItems:'center', marginBottom:18, justifyContent:'flex-end'}}>
                 <label style={{fontWeight:500, marginRight:8}}>Number of records:</label>
                 <input
@@ -232,7 +238,7 @@ const ERDEditor = () => {
                   }}
                 >Regenerate</button>
               </div>
-            )}
+            )} */}
             {/* Loader: Show while uploading or processing */}
             {(uploading || mockLoading) && (
               <div style={{display:'flex',justifyContent:'center',alignItems:'center',height:'60vh',width:'100%'}}>
@@ -241,9 +247,9 @@ const ERDEditor = () => {
             )}
             {/* Output: Schema from Image */}
             {!uploading && !mockLoading && imageSchema && (
-              <div className={styles.resultBox} style={{background: '#fff', border: '1.5px solid #b2b2ff', boxShadow: '0 2px 16px #e2e6f7', borderRadius: 10, marginBottom: 36}}>
+              <div className={styles.resultBox} style={{background: '#fff', border: '1.5px solid #b2b2ff', borderRadius: 10, marginBottom: 36}}>
                 <h3 style={{marginTop:0, color:'#5b5b9a', fontWeight:700}}>Schema from Image</h3>
-                <pre style={{fontSize: 15, color:'#232526', background:'#f4f6fb', padding:18, borderRadius:8, overflowX:'auto'}}>{imageSchema}</pre>
+                <pre style={{fontSize: 15, color:'#232526', background:'#f4f6fb', padding:18, borderRadius:8, }}>{imageSchema}</pre>
               </div>
             )}
             {/* Output: Mock Data */}
@@ -253,7 +259,7 @@ const ERDEditor = () => {
               </div>
             )}
             {!uploading && !mockLoading && mockData && (
-  <div className={styles.resultBox} style={{background: '#fff', border: '1.5px solid #6ee7b7', boxShadow: '0 2px 16px #e2f7e6', borderRadius: 10}}>
+  <div className={styles.resultBox} style={{background: '#fff',  borderRight: 'none', borderRadius: 10}}>
     {/* Table selection if multiple tables */}
     {Object.keys(mockData).length > 1 && (
       <div style={{marginBottom: 18}}>
@@ -277,8 +283,8 @@ const ERDEditor = () => {
       <div style={{marginBottom:32}}>
         <div style={{display:'flex', alignItems:'center', marginBottom:10}}>
           <div style={{fontWeight:600, fontSize:18, color:'#227a5e', marginRight:16}}>{table}</div>
-          <button onClick={handleDownloadJson} style={{marginRight:8, padding:'6px 14px', border:'none', background:'#e0e7ff', color:'#3730a3', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download JSON</button>
-          <button onClick={handleDownloadSql} style={{padding:'6px 14px', border:'none', background:'#bbf7d0', color:'#166534', borderRadius:5, fontWeight:500, cursor:'pointer'}}>Download SQL</button>
+          <button className={styles.blueBtn} onClick={handleDownloadJson}>Download JSON</button>
+          <button className={styles.blueBtn} onClick={handleDownloadSql}>Download SQL</button>
         </div>
         <div className={styles.tableScrollContainer}>
           <table style={{borderCollapse:'collapse', width:'100%', minWidth:'900px', background:'#f7fafc', fontSize:15}}>
